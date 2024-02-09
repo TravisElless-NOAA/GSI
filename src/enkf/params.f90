@@ -251,6 +251,9 @@ logical, public :: nccompress = .false.
 ! for writing increments
 logical,public :: write_fv3_incr = .false.
 character(len=12),dimension(10),public :: incvars_to_zero='NONE' !just picking 10 arbitrarily
+character(len=21),dimension(10),public :: incvars_to_zero_strat='NONE' !justpicking 10 arbitrarily
+real(r_kind),public :: incvars_efold=5.0_r_kind
+
 ! write ensemble mean analysis (or analysis increment)
 logical,public :: write_ensmean = .false.
 
@@ -286,7 +289,7 @@ namelist /nam_enkf/datestring,datapath,iassim_order,nvars,&
                    fv3_native, paranc, nccompress, write_fv3_incr,incvars_to_zero,write_ensmean, &
                    corrlengthrdrnh,corrlengthrdrsh,corrlengthrdrtr,&
                    lnsigcutoffrdrnh,lnsigcutoffrdrsh,lnsigcutoffrdrtr,&
-                   l_use_enkf_directZDA
+                   l_use_enkf_directZDA,incvars_to_zero_strat,incvars_efold
 namelist /nam_wrf/arw,nmm,nmm_restart
 namelist /nam_fv3/fv3fixpath,nx_res,ny_res,ntiles,l_pres_add_saved,l_fv3reg_filecombined, &
                   fv3_io_layout_nx,fv3_io_layout_ny

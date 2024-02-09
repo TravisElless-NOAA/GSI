@@ -3583,6 +3583,7 @@
   real(r_kind), dimension(nlevs+1) :: ak,bk
   real(r_kind) clip
 
+  integer,dimension(nlons,nlats) :: troplev
   integer :: u_ind, v_ind, tv_ind, q_ind, oz_ind, cw_ind
   integer :: ps_ind, pst_ind
   integer :: ql_ind, qi_ind, qr_ind, qs_ind, qg_ind
@@ -3761,6 +3762,10 @@
   allocate(inc3d(nlons,nlats,nccount(3)))
   allocate(inc3d2(nlons,nlats,nccount(3)))
   allocate(inc3dout(nlons,nlats,nccount(3)))
+  
+  call read_vardata(dsfg,'pressfc',values_2d,errcode=iret)
+  call get_troplev_enkf(values_2d,ak,bk,troplev)
+
   ! u increment
   do k=1,nlevs
      krev = nlevs-k+1
@@ -3825,6 +3830,9 @@
        call copyfromgrdin(grdin(:,levels(q_ind-1) + krev,nb,ne),inc)
      endif
      inc3d(:,:,k) = reshape(inc,(/nlons,nlats/))
+     if (zero_increment_strat_enkf('sphum_inc')) then
+       call zero_inc_strat_enkf(inc3d(:,:,k),k,troplev)
+     end if
      qanl(:,:,k) = q(:,:,k) + inc3d(:,:,k)
   end do
   if (cliptracers)  where (qanl < clip) qanl = clip
@@ -4252,6 +4260,7 @@
   real(r_kind), dimension(nlevs+1) :: ak,bk
   real(r_kind) clip
 
+  integer,dimension(nlons,nlats) :: troplev
   integer :: u_ind, v_ind, tv_ind, q_ind, oz_ind, cw_ind
   integer :: ps_ind, pst_ind
   integer :: ql_ind, qi_ind, qr_ind, qs_ind, qg_ind
@@ -4464,6 +4473,10 @@
   allocate(inc3d(nlons,nlats,nccount(3)))
   allocate(inc3d2(nlons,nlats,nccount(3)))
   allocate(inc3dout(nlons,nlats,nccount(3)))
+
+  call read_vardata(dsfg,'pressfc',values_2d,errcode=iret)
+  call get_troplev_enkf(values_2d,ak,bk,troplev)
+
   ! u increment
   do k=lev_pe1(iope), lev_pe2(iope)
      krev = nlevs-k+1
@@ -4533,6 +4546,9 @@
        call copyfromgrdin(grdin(:,levels(q_ind-1) + krev,nb,ne),inc)
      endif
      inc3d(:,:,ki) = reshape(inc,(/nlons,nlats/))
+     if (zero_increment_strat_enkf('sphum_inc')) then
+        call zero_inc_strat_enkf(inc3d(:,:,ki),ki,troplev)
+     end if
      qanl(:,:,ki) = q(:,:,ki) + inc3d(:,:,ki)
   end do
   if (cliptracers)  where (qanl < clip) qanl = clip
@@ -4899,5 +4915,66 @@
     end do zeros_loop
 
   end function should_zero_increments_for
+
+  !! Is this variable in incvars_to_zero_strat?
+  logical function zero_increment_strat_enkf(check_var)
+    use params, only : incvars_to_zero_strat
+
+    character(len=*), intent(in) :: check_var !! Variable to search for
+
+    ! Local variables
+
+    character(len=21) :: varname ! temporary string for storing variable names
+    integer :: i ! incvars_to_zero loop index
+
+    zero_increment_strat_enkf=.false.
+
+    zeros_loop: do i=1,size(incvars_to_zero_strat)
+       varname = incvars_to_zero_strat(i)
+       if ( trim(varname) == check_var ) then
+          zero_increment_strat_enkf=.true.
+          return
+       endif
+    end do zeros_loop
+
+  end function zero_increment_strat_enkf
+
+
+  subroutine get_troplev_enkf(psfg,ak,bk,troplev)
+     use params, only: nlons,nlats,nlevs
+     use kinds, only: i_kind, r_kind
+     real(r_kind),dimension(nlons,nlats),intent(in   ) :: psfg
+     real(r_kind),dimension(nlevs),intent(in   ) :: ak,bk
+     integer(i_kind),dimension(nlons,nlats),intent(  out) :: troplev
+     integer(i_kind) :: i,j,k
+     do j=1,nlats
+        do i=1,nlons
+          do k=1,nlevs
+            if (.01_r_kind*psfg(i,j)*bk(k+1)+ak(k+1) <= 150.0 ) then
+              troplev(i,j) = k
+              exit
+            end if
+          end do
+        end do
+     end do
+  end subroutine get_troplev_enkf
+
+  subroutine zero_inc_strat_enkf(grid,k,troplev)
+     use params, only: nlons, nlats, nlevs, incvars_efold
+     use kinds, only: i_kind,r_kind
+     real(r_single),dimension(nlons,nlats),intent(inout) :: grid
+     integer(i_kind),dimension(nlons,nlats), intent(in   ) :: troplev
+     integer(i_kind), intent(in   ) :: k
+     real(r_single) :: scalefac
+     integer(i_kind) :: i,j
+     do j=1,nlats
+        do i=1,nlons
+              if (nlevs-troplev(i,j) > k) then
+                 scalefac = exp(-(real(nlevs-troplev(i,j)-k))/incvars_efold)
+                 grid(i,j) = grid(i,j) * scalefac
+              end if
+        end do
+     end do
+  end subroutine zero_inc_strat_enkf
 
 end module gridio
